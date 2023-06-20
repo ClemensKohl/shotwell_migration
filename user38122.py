@@ -1,5 +1,9 @@
+# from https://askubuntu.com/questions/18097/can-i-export-shotwell-pictures-database-saving-all-the-tags?utm_source=pocket_reader
+
+
+
 import os
-conn = sqlite3.connect("/home/  username  /.shotwell/data/photo.db")
+conn = sqlite3.connect("/home/clemens/.local/share/shotwell/data/photo.db")
 
 def get_tags():
     return [ x[0] for x in conn.execute("SELECT name FROM TagTable").fetchall()]
