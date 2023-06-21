@@ -144,6 +144,8 @@ unique_ids = list(set(
                 flatten(ids_by_tag.values())
                 ))
 
+# retrospectively, this is not really necessary.
+# kept because possibly I want to write it out as some kind of log file.
 photo_tr = subset_to_changed(photo_df, unique_ids)
 photo_tr_tagged = add_tags_to_df(photo_tr,  tags_by_id)
 
