@@ -156,7 +156,10 @@ cmds = get_commands(photo_tr_tagged, tag_df)
 
 pic = "/home/clemens/Pictures/testpic.jpg"
 testcmd = 'exiftool -overwrite_original_in_place -preserve -keywords+=rating1 "/home/clemens/Pictures/testpic.jpg"'
-tagcmd = 'exiftool -overwrite_original_in_place -preserve -keywords+=[\'testag\', \'testag2\'] /home/clemens/Pictures/testpic.jpg'
+tagcmd = 'exiftool -overwrite_original_in_place -preserve -keywords+=[\'testag\', \'testag2\'] /home/clemens/Pictures/testpic.jpg' 
+
+# TODO: Loop over tags and add seperate -keywords+=TAG to the command for each TAG. 
+
 # TODO: make a safety copy of each file edited to a folder keeping the original dir structure.
 # TODO: check if rating is already in file. If yes, what then?!
 
