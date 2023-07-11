@@ -86,7 +86,7 @@ def add_tags_to_df(df, tags_by_id):
 
     return df
 
-def get_commands(photo_df, tag_df):
+def get_commands(photo_df, tag_df, cp_target):
 
     """
     make a list of commands to write to EXIF data
@@ -97,11 +97,16 @@ def get_commands(photo_df, tag_df):
     tagged_photos = get_all_tagged_ids(tag_df)
     tagged_photos = swap_keys(tagged_photos)
 
+    cp_commands = []
     commands = []
 
     for id, rating in rated_photos.items():
         photo = photo_df.filename[photo_df.id == id].item()
         commands.append("exiftool -overwrite_original_in_place -preserve -keywords+=rating%d \"%s\"" % (rating, photo))
+
+        backup_photo = move_photo_to_path(source=photo, target=cp_target, root=None)
+        backup_dir = os.path.dirname(backup_photo)
+        cp_commands.append("mkdir -p {} && cp {} {}".format(backup_dir, photo, backup_photo))
 
     for id, tag in tagged_photos.items():
 
@@ -109,7 +114,13 @@ def get_commands(photo_df, tag_df):
         # for t in tag:
         commands.append("exiftool -overwrite_original_in_place -preserve -keywords+=%s \"%s\"" % (tag, photo))
 
-    return commands
+        backup_photo = move_photo_to_path(source=photo, target=cp_target, root=None)
+        backup_dir = os.path.dirname(backup_photo)
+        cp_commands.append("mkdir -p {} && cp {} {}".format(backup_dir, photo, backup_photo))
+
+    cp_commands = set(cp_commands)
+
+    return cp_commands, commands
 
 
 def extract_exif(file):
@@ -135,6 +146,31 @@ def print_exif(infoDict):
     for k, v in infoDict.items():
         print(k, ':', v)
 
+
+def move_photo_to_path(source, target, root=None):
+    """
+    Take a given photo file and copy it into the target folder,
+     while maintaining its relative path based on the root picture folder.
+    :param source:
+    :param target:
+    :param root:
+    :return:
+    """
+
+    if root is None:
+        root = os.path.commonpath([source, target])
+        rel_path_target = os.path.relpath(target, root)
+
+    else:
+        rel_path_target = os.path.basename(target)
+
+
+    rel_path_source = os.path.relpath(source, root)
+
+    cp_path = os.path.join(root, rel_path_target, rel_path_source)
+
+    return cp_path
+
 # Generate data frames
 ids_by_tag = get_all_tagged_ids(tag_df)
 tags_by_id = swap_keys(ids_by_tag)
@@ -150,8 +186,18 @@ photo_tr = subset_to_changed(photo_df, unique_ids)
 photo_tr_tagged = add_tags_to_df(photo_tr,  tags_by_id)
 
 # get tagging/rating commands
-cmds = get_commands(photo_tr_tagged, tag_df)
+cp_cmds, exif_cmds = get_commands(photo_tr_tagged, tag_df, cp_target = "/media/clemens/Foto1/Pictures/backups")
 
-# TODO: make a safety copy of each file edited to a folder keeping the original dir structure.
+# create backups:
+for cp in cp_cmds:
+    print(cp)
+    os.system(cp)
+
+# write exif data.
+for ecmd in exif_cmds:
+    print(ecmd)
+    os.system(ecmd)
+
+
 # TODO: check if rating is already in file. If yes, what then?!
 
