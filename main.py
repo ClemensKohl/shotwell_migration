@@ -41,6 +41,8 @@ def get_all_tagged_ids(tag_df):
     for i, row in tag_df.iterrows():
         photo_ids = []
         # iterate over split ids (the photos)
+        if row.photo_id_list is None: continue
+
         for s in row.photo_id_list.split(','):
 
             # we don't care about videos
@@ -102,7 +104,7 @@ def get_commands(photo_df, tag_df, cp_target):
 
     for id, rating in rated_photos.items():
         photo = photo_df.filename[photo_df.id == id].item()
-        commands.append("exiftool -overwrite_original_in_place -preserve -keywords+=rating%d \"%s\"" % (rating, photo))
+        commands.append("exiftool -overwrite_original_in_place -preserve -rating=%d \"%s\"" % (rating, photo))
 
         backup_photo = move_photo_to_path(source=photo, target=cp_target, root=None)
         backup_dir = os.path.dirname(backup_photo)
@@ -199,5 +201,10 @@ for ecmd in exif_cmds:
     os.system(ecmd)
 
 
+pic = "/home/clemens/Pictures/testpic.jpg"
+testcmd = 'exiftool -overwrite_original_in_place -preserve -keywords+=rating1 "/home/clemens/Pictures/testpic.jpg"'
+tagcmd = 'exiftool -overwrite_original_in_place -preserve -keywords+=[\'testag\', \'testag2\'] /home/clemens/Pictures/testpic.jpg' 
+
+# TODO: Loop over tags and add seperate -keywords+=TAG to the command for each TAG. 
 # TODO: check if rating is already in file. If yes, what then?!
 
