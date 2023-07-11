@@ -191,14 +191,14 @@ photo_tr_tagged = add_tags_to_df(photo_tr,  tags_by_id)
 cp_cmds, exif_cmds = get_commands(photo_tr_tagged, tag_df, cp_target = "/media/clemens/Foto1/Pictures/backups")
 
 # create backups:
-for cp in cp_cmds:
-    print(cp)
-    os.system(cp)
-
-# write exif data.
-for ecmd in exif_cmds:
-    print(ecmd)
-    os.system(ecmd)
+# for cp in cp_cmds:
+#     print(cp)
+#     os.system(cp)
+#
+# # write exif data.
+# for ecmd in exif_cmds:
+#     print(ecmd)
+#     os.system(ecmd)
 
 
 pic = "/home/clemens/Pictures/testpic.jpg"
