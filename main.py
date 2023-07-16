@@ -6,7 +6,7 @@ import sqlite3, pandas, os, time, datetime
 import numpy as np
 import subprocess
 
-con = sqlite3.connect('/home/clemens/.local/share/shotwell/data/photo_backup.db')
+con = sqlite3.connect('/home/clemens/.local/share/shotwell/data/photo.db')
 photo_df = pandas.read_sql("SELECT * from PhotoTable", con)
 
 for c in ['exposure_time','timestamp','time_created']:
