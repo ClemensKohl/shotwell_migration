@@ -101,9 +101,16 @@ def get_commands(photo_df, tag_df, cp_target):
 
     cp_commands = []
     commands = []
+    nonexist = []
 
     for id, rating in rated_photos.items():
+
         photo = photo_df.filename[photo_df.id == id].item()
+
+        if not os.path.isfile(photo):
+            nonexist.append(photo)
+            continue
+
         commands.append("exiftool -overwrite_original_in_place -preserve -rating=%d \"%s\"" % (rating, photo))
 
         backup_photo = move_photo_to_path(source=photo, target=cp_target, root=None)
@@ -111,14 +118,20 @@ def get_commands(photo_df, tag_df, cp_target):
         cp_commands.append("mkdir -p {} && cp {} {}".format(backup_dir, photo, backup_photo))
 
     for id, tag in tagged_photos.items():
-
+        # i+=1
         photo = photo_df.filename[photo_df.id == id].item()
 
         # get tags:
         # exif_df = extract_exif(photo)
         # if tag is exif_df["Keywords"]: continue
 
-        tag = tag.split(', ')
+        if not os.path.isfile(photo):
+            nonexist.append(photo)
+            continue
+
+        if type(tag) is not list:
+            tag = tag.split(', ')
+
         cmd_start = "exiftool -overwrite_original_in_place -preserve"
         keywords = ""
         # cmd_end = photo
@@ -135,7 +148,7 @@ def get_commands(photo_df, tag_df, cp_target):
 
     cp_commands = set(cp_commands)
 
-    return cp_commands, commands
+    return cp_commands, commands, nonexist
 
 
 def extract_exif(file):
@@ -201,7 +214,29 @@ photo_tr = subset_to_changed(photo_df, unique_ids)
 photo_tr_tagged = add_tags_to_df(photo_tr,  tags_by_id)
 
 # get tagging/rating commands
-cp_cmds, exif_cmds = get_commands(photo_tr_tagged, tag_df, cp_target = "/media/clemens/Foto1/Pictures/backups")
+cp_cmds, exif_cmds, nonexist = get_commands(photo_tr_tagged, tag_df, cp_target = "/media/clemens/Foto1/Pictures/backups")
+
+os.makedirs("./out", exist_ok=True)
+
+cp_file=open('./out/cp_cmds.sh','w')
+for c in cp_cmds:
+     cp_file.write(c)
+     cp_file.write('\n')
+cp_file.close()
+
+exif_file=open('./out/exif_cmds.sh','w')
+for e in exif_cmds:
+     exif_file.write(e)
+     exif_file.write('\n')
+exif_file.close()
+
+nonexist_file=open('./out/nonexist.txt','w')
+for f in nonexist:
+     nonexist_file.write(f)
+     nonexist_file.write('\n')
+nonexist_file.close()
+
+
 
 # create backups:
 # for cp in cp_cmds:
