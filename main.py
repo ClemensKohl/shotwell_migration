@@ -111,11 +111,12 @@ def get_commands(photo_df, tag_df, cp_target):
             nonexist.append(photo)
             continue
 
-        commands.append("exiftool -overwrite_original_in_place -preserve -rating=%d \"%s\"" % (rating, photo))
+        # TODO: Deal with -1 Ratings. Most are only 0-5.
+        commands.append("exiftool -overwrite_original_in_place -preserve -xmp:Rating=%d \"%s\"" % (rating, photo))
 
         backup_photo = move_photo_to_path(source=photo, target=cp_target, root=None)
         backup_dir = os.path.dirname(backup_photo)
-        cp_commands.append("mkdir -p {} && cp {} {}".format(backup_dir, photo, backup_photo))
+        cp_commands.append("mkdir -p \'{}\' && cp \'{}\' \'{}\'".format(backup_dir, photo, backup_photo))
 
     for id, tag in tagged_photos.items():
         # i+=1
@@ -136,15 +137,15 @@ def get_commands(photo_df, tag_df, cp_target):
         keywords = ""
         # cmd_end = photo
         for t in tag:
-            keywords += " -keywords-={} -keywords+={}".format(t, t)
+            keywords += " -xmp:Subject-=\'{}\' -xmp:Subject+=\'{}\'".format(t, t)
 
-        cmd = cmd_start + keywords + " " + photo
+        cmd = cmd_start + keywords + " " + "\'" + photo + "\'"
         commands.append(cmd)
         # commands.append("exiftool -overwrite_original_in_place -preserve -keywords+=%s \"%s\"" % (tag, photo))
 
         backup_photo = move_photo_to_path(source=photo, target=cp_target, root=None)
         backup_dir = os.path.dirname(backup_photo)
-        cp_commands.append("mkdir -p {} && cp {} {}".format(backup_dir, photo, backup_photo))
+        cp_commands.append("mkdir -p \'{}\' && cp \'{} \'{}\'".format(backup_dir, photo, backup_photo))
 
     cp_commands = set(cp_commands)
 
@@ -237,8 +238,8 @@ for f in nonexist:
 nonexist_file.close()
 
 
-
-# create backups:
+# TODO: Uncomment!!
+# # create backups:
 # for cp in cp_cmds:
 #     print(cp)
 #     os.system(cp)
@@ -247,4 +248,3 @@ nonexist_file.close()
 # for ecmd in exif_cmds:
 #     print(ecmd)
 #     os.system(ecmd)
-

@@ -39,7 +39,7 @@ rename_files() {
                       # Move duplicate files to duplicates directory preserving directory structure
                       local relative_path="${file#$dir}"
                       local filename=$(basename "$file")
-                      local duplicate_dir="./duplicates${relative_path%$filename}"
+                      local duplicate_dir="$dir/duplicates${relative_path%$filename}"
                       local duplicate_file="$duplicate_dir/${file##*/}"
 
                       local new_name="${file%$arw_dupl_extention}$arw_extention"
@@ -61,7 +61,7 @@ rename_files() {
                       # Move duplicate files to duplicates directory preserving directory structure
                       local relative_path="${file#$dir}"
                       local filename=$(basename "$file")
-                      local duplicate_dir="./duplicates${relative_path%$filename}"
+                      local duplicate_dir="$dir/duplicates${relative_path%$filename}"
                       local duplicate_file="$duplicate_dir/${file##*/}"
 
                       # local new_name="${file%$dupl_extension}$new_extension"
@@ -82,7 +82,7 @@ rename_files() {
                       # Move duplicate files to duplicates directory preserving directory structure
                       local relative_path="${file#$dir}"
                       local filename=$(basename "$file")
-                      local duplicate_dir="./duplicates${relative_path%$filename}"
+                      local duplicate_dir="$dir/duplicates${relative_path%$filename}"
                       local duplicate_file="$duplicate_dir/${file##*/}"
 
 
