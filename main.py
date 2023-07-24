@@ -103,6 +103,11 @@ def get_commands(photo_df, tag_df, cp_target):
     commands = []
     nonexist = []
 
+    # TODO: Check if JPEG of a RAW file exists and then add tagging/rating commands for it too and vice versa.
+    # TODO: Only add the above command if the file is not already in the list of files to rate/tag.
+
+    # TODO: Write metadata to seperate xmp file for RAF files.
+
     for id, rating in rated_photos.items():
 
         photo = photo_df.filename[photo_df.id == id].item()
@@ -111,12 +116,14 @@ def get_commands(photo_df, tag_df, cp_target):
             nonexist.append(photo)
             continue
 
-        # TODO: Deal with -1 Ratings. Most are only 0-5.
-        commands.append("exiftool -overwrite_original_in_place -preserve -xmp:Rating=%d \"%s\"" % (rating, photo))
+        if rating == -1:
+            commands.append("exiftool -overwrite_original_in_place -preserve -xmp:PickLabel=1 \'{}\'".format(photo))
+        else:
+            commands.append("exiftool -overwrite_original_in_place -preserve -xmp:Rating=%d \'%s\'" % (rating, photo))
 
         backup_photo = move_photo_to_path(source=photo, target=cp_target, root=None)
         backup_dir = os.path.dirname(backup_photo)
-        cp_commands.append("mkdir -p \'{}\' && cp \'{}\' \'{}\'".format(backup_dir, photo, backup_photo))
+        cp_commands.append("mkdir -p \'{}\' && cp -v \'{}\' \'{}\'".format(backup_dir, photo, backup_photo))
 
     for id, tag in tagged_photos.items():
         # i+=1
@@ -137,7 +144,7 @@ def get_commands(photo_df, tag_df, cp_target):
         keywords = ""
         # cmd_end = photo
         for t in tag:
-            keywords += " -xmp:Subject-=\'{}\' -xmp:Subject+=\'{}\'".format(t, t)
+            keywords += " -xmp:Subject-=\'{}\' -xmp:Subject+=\'{}\' -xmp:TagsList-=\'{}\' -xmp:TagsList+=\'{}\'".format(t, t, t, t)
 
         cmd = cmd_start + keywords + " " + "\'" + photo + "\'"
         commands.append(cmd)
@@ -145,7 +152,7 @@ def get_commands(photo_df, tag_df, cp_target):
 
         backup_photo = move_photo_to_path(source=photo, target=cp_target, root=None)
         backup_dir = os.path.dirname(backup_photo)
-        cp_commands.append("mkdir -p \'{}\' && cp \'{} \'{}\'".format(backup_dir, photo, backup_photo))
+        cp_commands.append("mkdir -p \'{}\' && cp -v \'{}\' \'{}\'".format(backup_dir, photo, backup_photo))
 
     cp_commands = set(cp_commands)
 
@@ -217,28 +224,39 @@ photo_tr_tagged = add_tags_to_df(photo_tr,  tags_by_id)
 # get tagging/rating commands
 cp_cmds, exif_cmds, nonexist = get_commands(photo_tr_tagged, tag_df, cp_target = "/media/clemens/Foto1/Pictures/backups")
 
-os.makedirs("./out", exist_ok=True)
+# os.makedirs("./out", exist_ok=True)
+#
+# cp_file=open('./out/cp_cmds.sh','w')
+#
+# cp_file.write('#!/bin/bash')
+# cp_file.write('\n')
+# for c in cp_cmds:
+#      cp_file.write(c)
+#      cp_file.write('\n')
+#      # cp_file.write("echo \"{}\"".format(c))
+#      # cp_file.write('\n')
+# cp_file.close()
+#
+# exif_file=open('./out/exif_cmds.sh','w')
+#
+# exif_file.write('#!/bin/bash')
+# exif_file.write('\n')
+#
+# for e in exif_cmds:
+#      exif_file.write("echo \"{}\"".format(e))
+#      exif_file.write('\n')
+#      exif_file.write(e)
+#      exif_file.write('\n')
+#
+# exif_file.close()
+#
+# nonexist_file=open('./out/nonexist.txt','w')
+# for f in nonexist:
+#      nonexist_file.write(f)
+#      nonexist_file.write('\n')
+#
+# nonexist_file.close()
 
-cp_file=open('./out/cp_cmds.sh','w')
-for c in cp_cmds:
-     cp_file.write(c)
-     cp_file.write('\n')
-cp_file.close()
-
-exif_file=open('./out/exif_cmds.sh','w')
-for e in exif_cmds:
-     exif_file.write(e)
-     exif_file.write('\n')
-exif_file.close()
-
-nonexist_file=open('./out/nonexist.txt','w')
-for f in nonexist:
-     nonexist_file.write(f)
-     nonexist_file.write('\n')
-nonexist_file.close()
-
-
-# TODO: Uncomment!!
 # # create backups:
 # for cp in cp_cmds:
 #     print(cp)
