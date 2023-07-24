@@ -107,6 +107,12 @@ def get_commands(photo_df, tag_df, cp_target):
     # TODO: Only add the above command if the file is not already in the list of files to rate/tag.
 
     # TODO: Write metadata to seperate xmp file for RAF files.
+    # digikam seems to recognize the following format (*.RAF.xmp):
+    # exiftool /media/clemens/Foto1/Pictures/2023/04/21/_DSF0948.RAF -o /media/clemens/Foto1/Pictures/2023/04/21/_DSF0948.RAF.xmp "-all:all<xmp:all"
+    # the xmp file can be edited just like a RAW/jpg file:
+    # exiftool -overwrite_original_in_place -preserve  -xmp:TagsList+='xmptag' /media/clemens/Foto1/Pictures/2023/05/29/DSCF1714.RAF.xmp
+    # so defacto you just first check if its a RAF file, then create xmp sidecar, and concat .xmp to the filename.
+    # Checking if there is a JPG should be done independent for ARW and RAF.
 
     for id, rating in rated_photos.items():
 
