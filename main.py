@@ -88,6 +88,10 @@ def add_tags_to_df(df, tags_by_id):
 
     return df
 
+def get_ext(file):
+    file_name, file_extension = os.path.splitext(file)
+    return(file_extension)
+
 def get_commands(photo_df, tag_df, cp_target):
 
     """
@@ -101,6 +105,7 @@ def get_commands(photo_df, tag_df, cp_target):
 
     cp_commands = []
     commands = []
+    xmp_commands = []
     nonexist = []
 
     # TODO: Check if JPEG of a RAW file exists and then add tagging/rating commands for it too and vice versa.
@@ -121,6 +126,15 @@ def get_commands(photo_df, tag_df, cp_target):
         if not os.path.isfile(photo):
             nonexist.append(photo)
             continue
+
+        # WIP: Detect if RAW or JPG.
+        ext = get_ext(photo)
+
+        if ext == ".ARW" or ext == ".RAF":
+            xmp = photo + ".xmp"
+            xmp_cmd = "exiftool \'{}\' -o \'{}\' '-all:all<xmp:all'".format(photo, xmp)
+            xmp_commands.append(xmp_cmd)
+            # TODO: write data to xmpt file. (? or move cmd to after it writing it?)
 
         if rating == -1:
             commands.append("exiftool -overwrite_original_in_place -preserve -xmp:PickLabel=1 \'{}\'".format(photo))
