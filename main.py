@@ -77,7 +77,7 @@ def subset_to_changed(df, ids, ):
 
     photo_tr = df.loc[(rated | tagged).reshape(-1), :]
 
-    return(photo_tr)
+    return photo_tr.copy()
 
 def add_tags_to_df(df, tags_by_id):
     """ Add the tags to the data frame"""
@@ -114,13 +114,45 @@ def find_RAWs(file):
 
     return raws
 
-def get_commands(photo_df, tag_df, cp_target):
+def rate_photo(file, rating):
+
+    rating_start = "exiftool -overwrite_original_in_place -preserve "
+
+    if rating == -1:
+        cmd = rating_start + "-xmp:PickLabel=1 \'{}\'".format(file)
+    else:
+        cmd = rating_start + "-xmp:Rating=%d \'%s\'" % (rating, file)
+    return cmd
+
+def backup_photo(file, cp_target, root = None):
+    backup_photo = move_photo_to_path(source=file, target=cp_target, root=root)
+    backup_dir = os.path.dirname(backup_photo)
+    cmd = "mkdir -p \'{}\' && cp -v \'{}\' \'{}\'".format(backup_dir, file, backup_photo)
+
+    return cmd
+
+
+def tag_photo(file, tag):
+    # assemble command for main file to be tagged.
+    cmd_start = "exiftool -overwrite_original_in_place -preserve"
+    keywords = ""
+    # cmd_end = photo
+    for t in tag:
+        keywords += " -xmp:Subject-=\'{}\' -xmp:Subject+=\'{}\' -xmp:TagsList-=\'{}\' -xmp:TagsList+=\'{}\'".format(
+            t, t, t, t)
+
+    cmd = cmd_start + keywords + " " + "\'" + file + "\'"
+
+    return cmd
+
+def get_commands(photo_df, tag_df, cp_target, write_to_RAW = False):
 
     """
     make a list of commands to write to EXIF data
     using exiftools
     """
 
+    # get rated & tagged photos
     rated_photos = get_all_rated_ids(photo_df)
     tagged_photos = get_all_tagged_ids(tag_df)
     tagged_photos = swap_keys(tagged_photos)
@@ -130,18 +162,14 @@ def get_commands(photo_df, tag_df, cp_target):
     xmp_commands = []
     nonexist = []
 
-
-    # digikam seems to recognize the following format (*.RAF.xmp):
-    # exiftool /media/clemens/Foto1/Pictures/2023/04/21/_DSF0948.RAF -o /media/clemens/Foto1/Pictures/2023/04/21/_DSF0948.RAF.xmp "-all:all<xmp:all"
-    # the xmp file can be edited just like a RAW/jpg file:
-    # exiftool -overwrite_original_in_place -preserve  -xmp:TagsList+='xmptag' /media/clemens/Foto1/Pictures/2023/05/29/DSCF1714.RAF.xmp
-    # so defacto you just first check if its a RAF file, then create xmp sidecar, and concat .xmp to the filename.
-    # Checking if there is a JPG should be done independent for ARW and RAF.
+    ##############################################
+    #####      Write ratings to files.      ######
+    ##############################################
 
     for id, rating in rated_photos.items():
 
         photo = photo_df.filename[photo_df.id == id].item()
-        write_file = photo
+        write_file = photo # so we can modify it without changing photo.
 
         if not os.path.isfile(photo):
             nonexist.append(photo)
@@ -151,98 +179,101 @@ def get_commands(photo_df, tag_df, cp_target):
         ext = get_ext(photo)
 
         rating_start = "exiftool -overwrite_original_in_place -preserve "
+
+        # When raw file, write to xmp file instead!
+        # INFO: If you prefer to instead write the information also to the file itself, set write_to_RAW True
         if ext == ".ARW" or ext == ".RAF":
             xmp = photo + ".xmp"
             xmp_cmd = "exiftool \'{}\' -o \'{}\' '-all:all<xmp:all'".format(photo, xmp)
             xmp_commands.append(xmp_cmd)
 
-            # Write data to xmp file INSTEAD of RAW file.
-            write_file = xmp
+            if write_to_RAW is True:
+                # write to both xmp and RAW file.
+                write_file = photo
+                commands.append(rate_photo(xmp, rating))
+            else:
+                # Write data to xmp file INSTEAD of RAW file.
+                write_file = xmp
 
+        # make commands for rating tags. (either .xmp file or .jpg
+        commands.append(rate_photo(write_file, rating))
+        cp_commands.append(backup_photo(file = photo, cp_target = cp_target, root = None))
 
-        # INFO: If you prefer to instead write the information also to the file itself, move the else block to before
-        # checking if it is a RAW file, then, we do not need to also write it to the xmp file.
-
-        if rating == -1:
-            commands.append(rating_start + "-xmp:PickLabel=1 \'{}\'".format(write_file))
-        else:
-            commands.append(rating_start + "-xmp:Rating=%d \'%s\'" % (rating, write_file))
-
-        backup_photo = move_photo_to_path(source=photo, target=cp_target, root=None)
-        backup_dir = os.path.dirname(backup_photo)
-        cp_commands.append("mkdir -p \'{}\' && cp -v \'{}\' \'{}\'".format(backup_dir, photo, backup_photo))
-
+        ################
+        # extra files #
+        ###############
 
         # For each RAW file check if a jpg exists and write the metadata to it too. (and vice versa)
         if ext == ".ARW" or ext == ".RAF":
             extra_files = find_jpgs(photo)
         elif ext in [".jpg", ".jpeg", ".JPG", ".JPEG"]:
             extra_files = find_RAWs(photo)
+
         if len(extra_files) != 0:
             for ef in extra_files:
 
-                if ef in set(photo_df["filename"]:
+                # Only continue if the file is not going to be rated anyways.
+                if ef in set(photo_df["filename"]):
                     efid = photo_df.id[photo_df.filename == ef].item()
                     if efid in rated_photos.keys():
                         continue
 
+                # Quick backup.
+                cp_commands.append(backup_photo(file=ef, cp_target=cp_target, root=None))
 
-                backup_photo = move_photo_to_path(source=ef, target=cp_target, root=None)
-                backup_dir = os.path.dirname(backup_photo)
-                cp_commands.append("mkdir -p \'{}\' && cp -v \'{}\' \'{}\'".format(backup_dir, photo, backup_photo))
-
+                # If RAW file, write to xmp.
                 ext = get_ext(ef)
                 if ext == ".ARW" or ext == ".RAF":
                     xmp = photo + ".xmp"
                     xmp_cmd = "exiftool \'{}\' -o \'{}\' '-all:all<xmp:all'".format(ef, xmp)
                     xmp_commands.append(xmp_cmd)
-                    ef = xmd
 
-                if rating == -1:
-                    commands.append(rating_start + "-xmp:PickLabel=1 \'{}\'".format(ef))
-                else:
-                    commands.append(rating_start + "-xmp:Rating=%d \'%s\'" % (rating, ef))
+                    if write_to_RAW is True:
+                        commands.append(rate_photo(xmp, rating))
+                    else:
+                        ef = xmd
 
+                # Finally, append the rating.
+                commands.append(rate_photo(ef, rating))
 
-
-
-
+    ##############################################
+    #####        Write tags to files.       ######
+    ##############################################
     for id, tag in tagged_photos.items():
-        # i+=1
+
         photo = photo_df.filename[photo_df.id == id].item()
         write_file = photo
-        # get tags:
-        # exif_df = extract_exif(photo)
-        # if tag is exif_df["Keywords"]: continue
 
         if not os.path.isfile(photo):
             nonexist.append(photo)
             continue
 
+        # sometimes tags are written as lists, but they appear as a string.
         if type(tag) is not list:
             tag = tag.split(', ')
 
+        # Check if file is a RAW file and if so, write to xmp file instead.
         ext = get_ext(photo)
         if ext == ".ARW" or ext == ".RAF":
             xmp = photo + ".xmp"
             xmp_cmd = "exiftool \'{}\' -o \'{}\' '-all:all<xmp:all'".format(photo, xmp)
             xmp_commands.append(xmp_cmd)
-            write_file = xmp
 
+            # if we write to RAW, also write to xmp.
+            if write_to_RAW is True:
+                write_file = photo
+                commands.append(tag_photo(xmp, tag))
+            else:
+                write_file = xmp
 
-        cmd_start = "exiftool -overwrite_original_in_place -preserve"
-        keywords = ""
-        # cmd_end = photo
-        for t in tag:
-            keywords += " -xmp:Subject-=\'{}\' -xmp:Subject+=\'{}\' -xmp:TagsList-=\'{}\' -xmp:TagsList+=\'{}\'".format(t, t, t, t)
+        # assemble command for main file to be tagged.
+        commands.append(tag_photo(write_file, tag))
+        #backup
+        cp_commands.append(backup_photo(file = photo, cp_target = cp_target, root = None))
 
-        cmd = cmd_start + keywords + " " + "\'" + write_file + "\'"
-        commands.append(cmd)
-        # commands.append("exiftool -overwrite_original_in_place -preserve -keywords+=%s \"%s\"" % (tag, photo))
-
-        backup_photo = move_photo_to_path(source=photo, target=cp_target, root=None)
-        backup_dir = os.path.dirname(backup_photo)
-        cp_commands.append("mkdir -p \'{}\' && cp -v \'{}\' \'{}\'".format(backup_dir, photo, backup_photo))
+        ################
+        # extra files #
+        ###############
 
         # For each RAW file check if a jpg exists and write the metadata to it too. (and vice versa)
         if ext == ".ARW" or ext == ".RAF":
@@ -253,30 +284,35 @@ def get_commands(photo_df, tag_df, cp_target):
         if len(extra_files) != 0:
             for ef in extra_files:
 
-                if ef in set(photo_df["filename"]:
+                # Check if file would be tagged anyways. If so, skip file.
+                if ef in set(photo_df["filename"]):
                     efid = photo_df.id[photo_df.filename == ef].item()
                     if efid in tagged_photos.keys():
                         continue
 
-                backup_photo = move_photo_to_path(source=ef, target=cp_target, root=None)
-                backup_dir = os.path.dirname(backup_photo)
-                cp_commands.append("mkdir -p \'{}\' && cp -v \'{}\' \'{}\'".format(backup_dir, photo, backup_photo))
+                # Quick backup of the file.
+                cp_commands.append(backup_photo(file=ef, cp_target=cp_target, root=None))
 
+                # RAW deluxe treatment.
                 ext = get_ext(ef)
                 if ext == ".ARW" or ext == ".RAF":
                     xmp = photo + ".xmp"
                     xmp_cmd = "exiftool \'{}\' -o \'{}\' '-all:all<xmp:all'".format(ef, xmp)
                     xmp_commands.append(xmp_cmd)
-                    ef = xmd
 
-                cmd = cmd_start + keywords + " " + "\'" + ef + "\'"
-                commands.append(cmd)
+                    if write_to_RAW is True:
+                        commands.append(tag_photo(xmp, tag))
+                    else:
+                        ef = xmd
+
+                # Actually tag extra file
+                commands.append(tag_photo(ef, tag))
 
 
-
+    # Make sure we copy each file only once!
     cp_commands = set(cp_commands)
 
-    return cp_commands, commands, nonexist
+    return cp_commands, commands, xmp_commands, nonexist
 
 
 def extract_exif(file):
@@ -342,7 +378,12 @@ photo_tr = subset_to_changed(photo_df, unique_ids)
 photo_tr_tagged = add_tags_to_df(photo_tr,  tags_by_id)
 
 # get tagging/rating commands
-cp_cmds, exif_cmds, nonexist = get_commands(photo_tr_tagged, tag_df, cp_target = "/media/clemens/Foto1/Pictures/backups")
+cp_cmds, exif_cmds, xmp_cmds, nonexist = get_commands(photo_tr_tagged,
+                                                      tag_df,
+                                                      cp_target = "/media/clemens/Foto1/Pictures/backups",
+                                                      write_to_RAW=False)
+
+# TODO: Run a few simple tests on the real database. If it still works then, proceed.
 
 # os.makedirs("./out", exist_ok=True)
 #
@@ -356,6 +397,16 @@ cp_cmds, exif_cmds, nonexist = get_commands(photo_tr_tagged, tag_df, cp_target =
 #      # cp_file.write("echo \"{}\"".format(c))
 #      # cp_file.write('\n')
 # cp_file.close()
+
+# xmp_file=open('./out/xmp_cmds.sh','w')
+#
+# xmp_file.write('#!/bin/bash')
+# xmp_file.write('\n')
+# for x in xmp_cmds:
+#      xmp_file.write(x)
+#      xmp_file.write('\n')
+# xmp_file.close()
+
 #
 # exif_file=open('./out/exif_cmds.sh','w')
 #
