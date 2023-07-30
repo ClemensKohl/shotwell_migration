@@ -9,14 +9,16 @@ import subprocess
 con = sqlite3.connect('/home/clemens/.local/share/shotwell/data/photo.db')
 photo_df = pandas.read_sql("SELECT * from PhotoTable", con)
 
-for c in ['exposure_time','timestamp','time_created']:
-  photo_df[c] = photo_df[c].map(datetime.datetime.fromtimestamp)
+for c in ['exposure_time', 'timestamp', 'time_created']:
+    photo_df[c] = photo_df[c].map(datetime.datetime.fromtimestamp)
 
 tag_df = pandas.read_sql('SELECT * from TagTable', con)
+
 
 def flatten(l):
     """ Flatten a list of lists """
     return [item for sublist in l for item in sublist]
+
 
 def swap_keys(old_dict):
     """ Swaps the keys and values in a dict """
@@ -24,7 +26,7 @@ def swap_keys(old_dict):
     new_dict = {}
     for key, values in old_dict.items():
         for item in values:
-            if item in new_dict: # values can be duplicates!
+            if item in new_dict:  # values can be duplicates!
                 new_dict[item].append(key)
             else:
                 new_dict[item] = [key]
@@ -50,7 +52,7 @@ def get_all_tagged_ids(tag_df):
                 continue
 
             s = s.replace('thumb', '')
-            #convert to id
+            # convert to id
             if len(s):
                 photo_ids.append(int(s, 16))
 
@@ -58,8 +60,9 @@ def get_all_tagged_ids(tag_df):
 
     return tag_ids
 
+
 def get_all_rated_ids(photo_df):
-    r_ids = {} # rating by photo
+    r_ids = {}  # rating by photo
     # photo_ids = []
 
     # iterate over ratings
@@ -68,6 +71,7 @@ def get_all_rated_ids(photo_df):
             r_ids[row.id] = row.rating
 
     return r_ids
+
 
 def subset_to_changed(df, ids, ):
     """Only keep tagged and/or pictures with a rating."""
@@ -79,18 +83,21 @@ def subset_to_changed(df, ids, ):
 
     return photo_tr.copy()
 
+
 def add_tags_to_df(df, tags_by_id):
     """ Add the tags to the data frame"""
     df.loc[:, ("tags")] = np.nan
 
     for photo, tags in tags_by_id.items():
-        df.loc[df.id.isin([photo]), ("tags") ] = ",".join(tags)
+        df.loc[df.id.isin([photo]), ("tags")] = ",".join(tags)
 
     return df
+
 
 def get_ext(file):
     file_name, file_extension = os.path.splitext(file)
     return file_extension
+
 
 def get_filename(file):
     file_name, file_ext = os.path.splitext(file)
@@ -114,8 +121,8 @@ def find_RAWs(file):
 
     return raws
 
-def rate_photo(file, rating):
 
+def rate_photo(file, rating):
     rating_start = "exiftool -overwrite_original_in_place -preserve "
 
     if rating == -1:
@@ -124,7 +131,8 @@ def rate_photo(file, rating):
         cmd = rating_start + "-xmp:Rating=%d \'%s\'" % (rating, file)
     return cmd
 
-def backup_photo(file, cp_target, root = None):
+
+def backup_photo(file, cp_target, root=None):
     backup_photo = move_photo_to_path(source=file, target=cp_target, root=root)
     backup_dir = os.path.dirname(backup_photo)
     cmd = "mkdir -p \'{}\' && cp -v \'{}\' \'{}\'".format(backup_dir, file, backup_photo)
@@ -138,15 +146,18 @@ def tag_photo(file, tag):
     keywords = ""
     # cmd_end = photo
     for t in tag:
-        keywords += " -xmp:Subject-=\'{}\' -xmp:Subject+=\'{}\' -xmp:TagsList-=\'{}\' -xmp:TagsList+=\'{}\'".format(
-            t, t, t, t)
+        keywords += " -xmp:Subject-=\'{}\' -xmp:Subject+=\'{}\' -xmp:TagsList-=\'{}\' -xmp:TagsList+=\'{}\'".format(t, t, t, t)
 
     cmd = cmd_start + keywords + " " + "\'" + file + "\'"
 
     return cmd
 
-def get_commands(photo_df, tag_df, cp_target, write_to_RAW = False):
+def make_xmp(file, xmp):
+    xmp_cmd = "exiftool \'{}\' -o \'{}\' '-all:all<xmp:all'".format(file, xmp)
+    return xmp_cmd
 
+
+def get_commands(photo_df, tag_df, cp_target, write_to_RAW=False):
     """
     make a list of commands to write to EXIF data
     using exiftools
@@ -169,23 +180,19 @@ def get_commands(photo_df, tag_df, cp_target, write_to_RAW = False):
     for id, rating in rated_photos.items():
 
         photo = photo_df.filename[photo_df.id == id].item()
-        write_file = photo # so we can modify it without changing photo.
+        write_file = photo  # so we can modify it without changing photo.
 
         if not os.path.isfile(photo):
             nonexist.append(photo)
             continue
 
-        # WIP: Detect if RAW or JPG.
         ext = get_ext(photo)
-
-        rating_start = "exiftool -overwrite_original_in_place -preserve "
 
         # When raw file, write to xmp file instead!
         # INFO: If you prefer to instead write the information also to the file itself, set write_to_RAW True
         if ext == ".ARW" or ext == ".RAF":
             xmp = photo + ".xmp"
-            xmp_cmd = "exiftool \'{}\' -o \'{}\' '-all:all<xmp:all'".format(photo, xmp)
-            xmp_commands.append(xmp_cmd)
+            xmp_commands.append(make_xmp(photo, xmp))
 
             if write_to_RAW is True:
                 # write to both xmp and RAW file.
@@ -197,7 +204,7 @@ def get_commands(photo_df, tag_df, cp_target, write_to_RAW = False):
 
         # make commands for rating tags. (either .xmp file or .jpg
         commands.append(rate_photo(write_file, rating))
-        cp_commands.append(backup_photo(file = photo, cp_target = cp_target, root = None))
+        cp_commands.append(backup_photo(file=photo, cp_target=cp_target, root=None))
 
         ################
         # extra files #
@@ -224,9 +231,8 @@ def get_commands(photo_df, tag_df, cp_target, write_to_RAW = False):
                 # If RAW file, write to xmp.
                 ext = get_ext(ef)
                 if ext == ".ARW" or ext == ".RAF":
-                    xmp = photo + ".xmp"
-                    xmp_cmd = "exiftool \'{}\' -o \'{}\' '-all:all<xmp:all'".format(ef, xmp)
-                    xmp_commands.append(xmp_cmd)
+                    xmp = ef + ".xmp"
+                    xmp_commands.append(make_xmp(ef, xmp))
 
                     if write_to_RAW is True:
                         commands.append(rate_photo(xmp, rating))
@@ -239,6 +245,7 @@ def get_commands(photo_df, tag_df, cp_target, write_to_RAW = False):
     ##############################################
     #####        Write tags to files.       ######
     ##############################################
+
     for id, tag in tagged_photos.items():
 
         photo = photo_df.filename[photo_df.id == id].item()
@@ -256,8 +263,8 @@ def get_commands(photo_df, tag_df, cp_target, write_to_RAW = False):
         ext = get_ext(photo)
         if ext == ".ARW" or ext == ".RAF":
             xmp = photo + ".xmp"
-            xmp_cmd = "exiftool \'{}\' -o \'{}\' '-all:all<xmp:all'".format(photo, xmp)
-            xmp_commands.append(xmp_cmd)
+            xmp_commands.append(make_xmp(photo, xmp))
+
 
             # if we write to RAW, also write to xmp.
             if write_to_RAW is True:
@@ -268,8 +275,8 @@ def get_commands(photo_df, tag_df, cp_target, write_to_RAW = False):
 
         # assemble command for main file to be tagged.
         commands.append(tag_photo(write_file, tag))
-        #backup
-        cp_commands.append(backup_photo(file = photo, cp_target = cp_target, root = None))
+        # backup
+        cp_commands.append(backup_photo(file=photo, cp_target=cp_target, root=None))
 
         ################
         # extra files #
@@ -296,9 +303,8 @@ def get_commands(photo_df, tag_df, cp_target, write_to_RAW = False):
                 # RAW deluxe treatment.
                 ext = get_ext(ef)
                 if ext == ".ARW" or ext == ".RAF":
-                    xmp = photo + ".xmp"
-                    xmp_cmd = "exiftool \'{}\' -o \'{}\' '-all:all<xmp:all'".format(ef, xmp)
-                    xmp_commands.append(xmp_cmd)
+                    xmp = ef + ".xmp"
+                    xmp_commands.append(make_xmp(ef, xmp))
 
                     if write_to_RAW is True:
                         commands.append(tag_photo(xmp, tag))
@@ -307,7 +313,6 @@ def get_commands(photo_df, tag_df, cp_target, write_to_RAW = False):
 
                 # Actually tag extra file
                 commands.append(tag_photo(ef, tag))
-
 
     # Make sure we copy each file only once!
     cp_commands = set(cp_commands)
@@ -333,6 +338,7 @@ def extract_exif(file):
 
     return infoDict
 
+
 def print_exif(infoDict):
     """ Just print me the exif data so I can read it god damnit """
     for k, v in infoDict.items():
@@ -356,12 +362,12 @@ def move_photo_to_path(source, target, root=None):
     else:
         rel_path_target = os.path.basename(target)
 
-
     rel_path_source = os.path.relpath(source, root)
 
     cp_path = os.path.join(root, rel_path_target, rel_path_source)
 
     return cp_path
+
 
 # Generate data frames
 ids_by_tag = get_all_tagged_ids(tag_df)
@@ -369,18 +375,18 @@ tags_by_id = swap_keys(ids_by_tag)
 
 # bit of filtering
 unique_ids = list(set(
-                flatten(ids_by_tag.values())
-                ))
+    flatten(ids_by_tag.values())
+))
 
 # retrospectively, this is not really necessary.
 # kept because possibly I want to write it out as some kind of log file.
 photo_tr = subset_to_changed(photo_df, unique_ids)
-photo_tr_tagged = add_tags_to_df(photo_tr,  tags_by_id)
+photo_tr_tagged = add_tags_to_df(photo_tr, tags_by_id)
 
 # get tagging/rating commands
 cp_cmds, exif_cmds, xmp_cmds, nonexist = get_commands(photo_tr_tagged,
                                                       tag_df,
-                                                      cp_target = "/media/clemens/Foto1/Pictures/backups",
+                                                      cp_target="/media/clemens/Foto1/Pictures/backups",
                                                       write_to_RAW=False)
 
 # TODO: Run a few simple tests on the real database. If it still works then, proceed.
