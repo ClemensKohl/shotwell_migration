@@ -5,8 +5,8 @@
 import sqlite3, pandas, os, time, datetime
 import numpy as np
 import subprocess
-
-con = sqlite3.connect('/home/clemens/.local/share/shotwell/data/photo.db')
+# con = sqlite3.connect('/home/clemens/.local/share/shotwell/data/photo.db')
+con = sqlite3.connect('/home/clemens/Pictures/shotwell_photo_backup_230716.db')
 photo_df = pandas.read_sql("SELECT * from PhotoTable", con)
 
 for c in ['exposure_time', 'timestamp', 'time_created']:
@@ -172,6 +172,7 @@ def get_commands(photo_df, tag_df, cp_target, write_to_RAW=False):
     commands = []
     xmp_commands = []
     nonexist = []
+    extra_photos = []
 
     ##############################################
     #####      Write ratings to files.      ######
@@ -225,6 +226,10 @@ def get_commands(photo_df, tag_df, cp_target, write_to_RAW=False):
                     if efid in rated_photos.keys():
                         continue
 
+                if not os.path.isfile(ef):
+                    nonexist.append(ef)
+                    continue
+
                 # Quick backup.
                 cp_commands.append(backup_photo(file=ef, cp_target=cp_target, root=None))
 
@@ -237,10 +242,11 @@ def get_commands(photo_df, tag_df, cp_target, write_to_RAW=False):
                     if write_to_RAW is True:
                         commands.append(rate_photo(xmp, rating))
                     else:
-                        ef = xmd
+                        ef = xmp
 
                 # Finally, append the rating.
                 commands.append(rate_photo(ef, rating))
+                extra_photos.append(ef)
 
     ##############################################
     #####        Write tags to files.       ######
@@ -297,6 +303,9 @@ def get_commands(photo_df, tag_df, cp_target, write_to_RAW=False):
                     if efid in tagged_photos.keys():
                         continue
 
+                if not os.path.isfile(ef):
+                    nonexist.append(ef)
+                    continue
                 # Quick backup of the file.
                 cp_commands.append(backup_photo(file=ef, cp_target=cp_target, root=None))
 
@@ -309,15 +318,16 @@ def get_commands(photo_df, tag_df, cp_target, write_to_RAW=False):
                     if write_to_RAW is True:
                         commands.append(tag_photo(xmp, tag))
                     else:
-                        ef = xmd
+                        ef = xmp
 
                 # Actually tag extra file
                 commands.append(tag_photo(ef, tag))
+                extra_photos.append(ef)
 
     # Make sure we copy each file only once!
     cp_commands = set(cp_commands)
-
-    return cp_commands, commands, xmp_commands, nonexist
+    extra_photos = list(set(extra_photos))
+    return cp_commands, commands, xmp_commands, nonexist, extra_photos
 
 
 def extract_exif(file):
@@ -384,62 +394,101 @@ photo_tr = subset_to_changed(photo_df, unique_ids)
 photo_tr_tagged = add_tags_to_df(photo_tr, tags_by_id)
 
 # get tagging/rating commands
-cp_cmds, exif_cmds, xmp_cmds, nonexist = get_commands(photo_tr_tagged,
-                                                      tag_df,
-                                                      cp_target="/media/clemens/Foto1/Pictures/backups",
-                                                      write_to_RAW=False)
+cp_cmds, exif_cmds, xmp_cmds, nonexist, extra_photos = get_commands(photo_tr_tagged,
+                                                              tag_df,
+                                                              cp_target="/media/clemens/Foto1/Pictures/backups",
+                                                              write_to_RAW=False)
+
+
+os.makedirs("./out", exist_ok=True)
+
+cp_file=open('./out/cp_cmds.sh','w')
+
+cp_file.write('#!/bin/bash')
+cp_file.write('\n')
+for c in cp_cmds:
+     cp_file.write(c)
+     cp_file.write('\n')
+     # cp_file.write("echo \"{}\"".format(c))
+     # cp_file.write('\n')
+cp_file.close()
+
+xmp_file=open('./out/xmp_cmds.sh','w')
+
+xmp_file.write('#!/bin/bash')
+xmp_file.write('\n')
+for x in xmp_cmds:
+     xmp_file.write("echo \"{}\"".format(x))
+     xmp_file.write('\n')
+     xmp_file.write(x)
+     xmp_file.write('\n')
+xmp_file.close()
+
+
+exif_file=open('./out/exif_cmds.sh','w')
+
+exif_file.write('#!/bin/bash')
+exif_file.write('\n')
+
+for e in exif_cmds:
+     exif_file.write("echo \"{}\"".format(e))
+     exif_file.write('\n')
+     exif_file.write(e)
+     exif_file.write('\n')
+
+exif_file.close()
+
+nonexist_file=open('./out/nonexist.txt','w')
+for f in nonexist:
+     nonexist_file.write(f)
+     nonexist_file.write('\n')
+
+nonexist_file.close()
+
+extras=open('./out/extras.txt','w')
+for e in extra_photos:
+     extras.write(e)
+     extras.write('\n')
+
+extras.close()
+
 
 # TODO: Run a few simple tests on the real database. If it still works then, proceed.
+# notcopied = set([file for cmd in cp_cmds for file in extra_photos if file not in cmd])
+# notcopied = []
+# for file in extra_photos:
+#
+#     is_in = False
+#     for cmd in cp_cmds:
+#         if file in cmd:
+#             is_in = True
+#
+#     if not is_in: notcopied.append(file)
+#
+#
+# notedited = []
+# for file in extra_photos:
+#
+#     is_in = False
+#     for cmd in exif_cmds:
+#         if file in cmd:
+#             is_in = True
+#
+#     if not is_in: notedited.append(file)
 
-# os.makedirs("./out", exist_ok=True)
+# notextra = []
+# for file in extra_photos:
 #
-# cp_file=open('./out/cp_cmds.sh','w')
-#
-# cp_file.write('#!/bin/bash')
-# cp_file.write('\n')
-# for c in cp_cmds:
-#      cp_file.write(c)
-#      cp_file.write('\n')
-#      # cp_file.write("echo \"{}\"".format(c))
-#      # cp_file.write('\n')
-# cp_file.close()
+#     if file in photo_df.filename.values:
+#         notextra.append(file)
 
-# xmp_file=open('./out/xmp_cmds.sh','w')
-#
-# xmp_file.write('#!/bin/bash')
-# xmp_file.write('\n')
-# for x in xmp_cmds:
-#      xmp_file.write(x)
-#      xmp_file.write('\n')
-# xmp_file.close()
-
-#
-# exif_file=open('./out/exif_cmds.sh','w')
-#
-# exif_file.write('#!/bin/bash')
-# exif_file.write('\n')
-#
-# for e in exif_cmds:
-#      exif_file.write("echo \"{}\"".format(e))
-#      exif_file.write('\n')
-#      exif_file.write(e)
-#      exif_file.write('\n')
-#
-# exif_file.close()
-#
-# nonexist_file=open('./out/nonexist.txt','w')
-# for f in nonexist:
-#      nonexist_file.write(f)
-#      nonexist_file.write('\n')
-#
-# nonexist_file.close()
-
-# # create backups:
-# for cp in cp_cmds:
-#     print(cp)
-#     os.system(cp)
-#
-# # write exif data.
-# for ecmd in exif_cmds:
-#     print(ecmd)
-#     os.system(ecmd)
+# XXX: DANGER, DO NOT RUN!
+## # create backups:
+## for cp in cp_cmds:
+##     print(cp)
+##     os.system(cp)
+##
+## # write exif data.
+## for ecmd in exif_cmds:
+##     print(ecmd)
+##     os.system(ecmd)
