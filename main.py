@@ -6,7 +6,8 @@ import sqlite3, pandas, os, time, datetime
 import numpy as np
 import subprocess
 # con = sqlite3.connect('/home/clemens/.local/share/shotwell/data/photo.db')
-con = sqlite3.connect('/home/clemens/Pictures/shotwell_photo_backup_230716.db')
+con = sqlite3.connect('/home/clemens/gits/Shotwell_migration/out/230615_db_based_cmds/230615_shotwell_photo.db')
+
 photo_df = pandas.read_sql("SELECT * from PhotoTable", con)
 
 for c in ['exposure_time', 'timestamp', 'time_created']:
@@ -454,7 +455,6 @@ extras.close()
 
 
 # TODO: Run a few simple tests on the real database. If it still works then, proceed.
-# notcopied = set([file for cmd in cp_cmds for file in extra_photos if file not in cmd])
 # notcopied = []
 # for file in extra_photos:
 #
@@ -475,7 +475,7 @@ extras.close()
 #             is_in = True
 #
 #     if not is_in: notedited.append(file)
-
+#
 # notextra = []
 # for file in extra_photos:
 #
